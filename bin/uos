@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# universal-os CLI launcher — self-sets-up with uv (universal-modder convention),
+# falls back to the system Python.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if command -v uv >/dev/null 2>&1; then
+  exec uv run --project "$DIR" uos "$@"
+fi
+exec python3 -c "import sys; sys.path.insert(0, '$DIR'); from universal_os.cli import main; sys.exit(main())" "$@"

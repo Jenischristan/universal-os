@@ -1,0 +1,5 @@
+# Codex CLI — universal-os MCP server
+[mcp_servers."universal-os"]
+command = "uos-mcp"
+args = []
+env = { "UOS_HOME" = "~/.universal-os" }
