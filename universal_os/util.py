@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -24,6 +26,14 @@ def run(cmd: list[str], timeout: int = 120, cwd: str | None = None) -> tuple[int
 
 
 def which(binary: str) -> str | None:
+    """Locate an executable portably. shutil.which covers PATH on every OS;
+    the bash-login-shell fallback catches PATH entries added by profile scripts
+    (common for QEMU on macOS/homebrew and MinGW installs)."""
+    found = shutil.which(binary)
+    if found:
+        return found
+    if os.name == "nt":
+        return None  # no bash fallback on Windows
     rc, out, _ = run(["bash", "-lc", f"command -v {binary}"])
     out = out.strip()
     return out if (rc == 0 and out) else None
@@ -68,3 +78,36 @@ def human_size(n: int) -> str:
             return f"{n:.1f} {unit}"
         n /= 1024
     return f"{n:.1f} TiB"
+
+
+def split_guest_args(s: str) -> list[str]:
+    """Split a guest command line on whitespace, honoring ' and " quoting, and
+    keeping backslashes literal (Windows cmd semantics — NOT POSIX escapes).
+
+    shlex.split(posix=True) eats backslashes ('C:\\uos' -> 'C:uos'); posix=False
+    keeps them but also keeps quote characters in tokens and refuses to group.
+    Guest command lines are Windows-style most of the time, so quotes group and
+    backslashes stay put:
+        split_guest_args('/c mkdir "C:\\uos-tests" 2>nul')
+          -> ['/c', 'mkdir', 'C:\\uos-tests', '2>nul']
+    """
+    tokens: list[str] = []
+    cur: list[str] = []
+    quote: str | None = None
+    for ch in s:
+        if quote:
+            if ch == quote:
+                quote = None
+            else:
+                cur.append(ch)
+        elif ch in ("'", '"'):
+            quote = ch
+        elif ch.isspace():
+            if cur:
+                tokens.append("".join(cur))
+                cur = []
+        else:
+            cur.append(ch)
+    if cur:
+        tokens.append("".join(cur))
+    return tokens

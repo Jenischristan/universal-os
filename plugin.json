@@ -1,11 +1,11 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "universal-os",
-  "version": "0.1.0",
-  "description": "Reverse engineer an existing OS from an ISO in a sandbox VM and rebuild it ReactOS-style, component by component, until its apps run on the rebuild. Skills, 32 MCP tools, CLI and a shared field-note knowledge base.",
-  "author": { "name": "universal-os contributors" },
-  "homepage": "https://github.com/your-org/universal-os",
-  "repository": "https://github.com/your-org/universal-os",
+  "version": "0.2.0",
+  "description": "Reverse engineer an existing OS from an ISO in a sandbox VM and rebuild it ReactOS-style, component by component, until its apps run on the rebuild. Skills, 35 MCP tools, CLI and a shared field-note knowledge base.",
+  "author": { "name": "Jenischristan", "url": "https://github.com/Jenischristan" },
+  "homepage": "https://github.com/Jenischristan/universal-os",
+  "repository": "https://github.com/Jenischristan/universal-os",
   "license": "MIT",
   "keywords": [
     "mcp", "reactos", "wine", "operating-system", "reverse-engineering",

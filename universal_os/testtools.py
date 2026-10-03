@@ -4,11 +4,17 @@ results, and aggregate compat/regression reports.
 """
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
 from . import qemu
 from .util import jdump, jload
+
+
+def _safe_label(label: str) -> str:
+    """Make a label safe for use in result filenames (keeps test history browsable)."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", label).strip("-") or "unnamed"
 
 
 def test_app_in_vm(vm: str, app_path: str | None, args: list[str] | None = None,
@@ -80,11 +86,17 @@ def test_app_in_vm(vm: str, app_path: str | None, args: list[str] | None = None,
         ws = Path(workspace).expanduser().resolve()
         results_dir = ws / "tests" / "results"
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        out = jdump(result, results_dir / f"{stamp}-{result['label']}.json".replace(" ", "_"))
+        out = jdump(result, results_dir / f"{stamp}-{_safe_label(result['label'])}.json")
         result["result_file"] = str(out)
         status = "PASS" if result["pass"] else "FAIL"
         from .util import append_md
-        append_md(ws / "tests" / "RESULTS.md",
+        results_md = ws / "tests" / "RESULTS.md"
+        if not results_md.exists():
+            results_md.write_text(
+                "# App-compat results\n\n"
+                "| Date | App | VM | Result | Exit | Result file |\n"
+                "|---|---|---|---|---|---|\n", encoding="utf-8")
+        append_md(results_md,
                   f"| {result['finished']} | {result['label']} | {vm} | {status} | "
                   f"{(result['run'] or {}).get('exitcode', '—')} | "
                   f"{Path(result['result_file']).name if result.get('result_file') else '—'} |\n")

@@ -7,12 +7,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 import sys
 from pathlib import Path
 
 from . import __version__, knowledge as kb, qemu, retools, testtools, forgetools
-from .util import which
+from .util import split_guest_args, which
 
 
 def _p(obj) -> None:
@@ -39,8 +38,14 @@ def cmd_iso(args) -> int:
             _p(retools.fingerprint_windows(args.path))
         except Exception as e:
             return _die(str(e))
+    elif args.iso_cmd == "extract":
+        try:
+            _p(retools.iso_extract(args.path, args.member, args.out,
+                                   max_bytes=args.max_mb * 1024 * 1024))
+        except Exception as e:
+            return _die(str(e))
     else:
-        print("usage: uos iso inspect|fingerprint <path>")
+        print("usage: uos iso inspect|fingerprint|extract <path>")
     return 0
 
 
@@ -63,7 +68,8 @@ def cmd_vm(args) -> int:
         elif args.vm_cmd == "restore":
             _p(qemu.vm_restore(args.name, args.tag))
         elif args.vm_cmd == "exec":
-            argv = shlex.split(args.args or "")
+            # Windows-cmd semantics: backslashes stay literal, quotes group
+            argv = split_guest_args(args.args) if args.args else []
             _p(qemu.vm_exec(args.name, args.path, argv, args.timeout))
         elif args.vm_cmd == "put":
             _p(qemu.vm_put_file(args.name, args.local, args.guest))
@@ -71,6 +77,8 @@ def cmd_vm(args) -> int:
             _p(qemu.vm_get_file(args.name, args.guest, args.local))
         elif args.vm_cmd == "mount":
             _p(qemu.vm_mount_iso(args.name, args.iso))
+        elif args.vm_cmd == "sendkey":
+            _p(qemu.vm_sendkey(args.name, args.keys, args.hold_ms))
         elif args.vm_cmd == "shutdown":
             _p(qemu.vm_shutdown(args.name, args.force))
         elif args.vm_cmd == "log":
@@ -138,9 +146,9 @@ def cmd_forge(args) -> int:
 def cmd_test(args) -> int:
     try:
         if args.test_cmd == "app":
-            argv = shlex.split(args.args or "")
-            inst = shlex.split(args.install) if args.install else None
-            run = shlex.split(args.run) if args.run else None
+            argv = split_guest_args(args.args or "")
+            inst = split_guest_args(args.install) if args.install else None
+            run = split_guest_args(args.run) if args.run else None
             _p(testtools.test_app_in_vm(args.vm, args.app, argv, args.workspace,
                                         inst, run, args.timeout, args.label))
         elif args.test_cmd == "report":
@@ -159,6 +167,8 @@ def cmd_kb(args) -> int:
     try:
         if args.kb_cmd == "search":
             _p({"hits": kb.search(args.query, limit=args.limit)})
+        elif args.kb_cmd == "path":
+            _p(kb.kb_path())
         elif args.kb_cmd == "new":
             _p(kb.new_note(args.os, args.component, args.title, args.agent,
                            args.status, args.tags, out=args.out))
@@ -167,7 +177,7 @@ def cmd_kb(args) -> int:
         elif args.kb_cmd == "index":
             _p(kb.index())
         else:
-            print("usage: uos kb search|new|check|index ...")
+            print("usage: uos kb search|path|new|check|index ...")
     except Exception as e:
         return _die(str(e))
     return 0
@@ -215,6 +225,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("path"); p.add_argument("--limit", type=int, default=300)
     p = iso_sub.add_parser("fingerprint", help="which Windows version is inside")
     p.add_argument("path")
+    p = iso_sub.add_parser("extract",
+                           help="extract one file from the ISO (inspect only, no mount)")
+    p.add_argument("path"); p.add_argument("member", help="path inside the ISO, e.g. /I386/NTOSKRNL.EX_")
+    p.add_argument("out", help="destination file or directory (keep it OUTSIDE the repo)")
+    p.add_argument("--max-mb", type=int, default=64, help="extraction size cap in MiB")
     iso.set_defaults(func=cmd_iso)
 
     vm = sub.add_parser("vm", help="sandbox VM lifecycle (QEMU headless)")
@@ -241,6 +256,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = vm_sub.add_parser("put"); p.add_argument("name"); p.add_argument("local"); p.add_argument("guest")
     p = vm_sub.add_parser("get"); p.add_argument("name"); p.add_argument("guest"); p.add_argument("local")
     p = vm_sub.add_parser("mount"); p.add_argument("name"); p.add_argument("iso")
+    p = vm_sub.add_parser("sendkey",
+                          help="send a key combo to the display (drive installers pre-guest-agent)")
+    p.add_argument("name"); p.add_argument("keys", help="e.g. ret, esc, f8, ctrl-alt-delete, shift-f10")
+    p.add_argument("--hold-ms", type=int, default=100)
     p = vm_sub.add_parser("shutdown"); p.add_argument("name"); p.add_argument("--force", action="store_true")
     p = vm_sub.add_parser("log"); p.add_argument("name"); p.add_argument("--tail", type=int, default=80)
     p = vm_sub.add_parser("destroy"); p.add_argument("name")
@@ -293,6 +312,7 @@ def build_parser() -> argparse.ArgumentParser:
     kbp = sub.add_parser("kb", help="field notes AIs write for AIs")
     kb_sub = kbp.add_subparsers(dest="kb_cmd", required=True)
     p = kb_sub.add_parser("search"); p.add_argument("query"); p.add_argument("--limit", type=int, default=10)
+    p = kb_sub.add_parser("path", help="show which knowledge-base roots resolve (repo/package/UOS_HOME)")
     p = kb_sub.add_parser("new"); p.add_argument("--os", required=True)
     p.add_argument("--component", required=True); p.add_argument("--title", required=True)
     p.add_argument("--agent", default="ai-agent"); p.add_argument("--status", default="working")

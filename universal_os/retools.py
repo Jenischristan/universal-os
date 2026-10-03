@@ -125,6 +125,39 @@ def fingerprint_windows(iso_path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# ISO file extraction (inspection only)
+# ---------------------------------------------------------------------------
+
+def iso_extract(iso_path: str, member: str, dest: str,
+                max_bytes: int = 64 * 1024 * 1024) -> dict:
+    """Extract one file from an install ISO with the pure-Python ISO9660/Joliet
+    reader (no mounting) to the host inspect dir.
+
+    Inspection only (RULES.md): extracted copies stay OUTSIDE the rebuilt-OS
+    repo (e.g. ~/inspect/<os>/); feed them to analyze_pe / dump_api_surface and
+    keep only the interface facts."""
+    from pathlib import Path as _P
+    dest_path = _P(dest).expanduser().resolve()
+    if dest_path.is_dir():
+        with isofs.IsoImage(iso_path) as iso:
+            member_clean = member.strip("/")
+            dest_path = dest_path / member_clean.replace("/", "_")
+            data = iso.read_file(member, max_bytes=max_bytes)
+    else:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        with isofs.IsoImage(iso_path) as iso:
+            data = iso.read_file(member, max_bytes=max_bytes)
+    dest_path.write_bytes(data)
+    return {
+        "iso": str(_P(iso_path).resolve()),
+        "member": member,
+        "extracted": str(dest_path),
+        "bytes": len(data),
+        "note": "inspect outside the repo; interface facts only (RULES.md)",
+    }
+
+
+# ---------------------------------------------------------------------------
 # PE analysis
 # ---------------------------------------------------------------------------
 

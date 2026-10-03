@@ -262,8 +262,9 @@ def _qemu_cmdline(meta: dict, boot: str, extra_iso: str | None = None) -> list[s
         "-chardev", f"socket,path={d / 'ga.sock'},server=on,wait=off,id=ga0",
         "-device", "virtserialport,chardev=ga0,name=org.qemu.guest_agent.0",
         "-pidfile", str(d / "qemu.pid"),
-        "-daemonize" if os.name != "nt" else "-daemonize",
     ]
+    if os.name != "nt":
+        args.append("-daemonize")  # -daemonize is unsupported on Windows hosts
     if meta.get("network"):
         args += ["-netdev", "user,id=n0", "-device", "e1000,netdev=n0"]
     else:
@@ -288,12 +289,16 @@ def vm_boot(name: str, wait_seconds: int = 45, boot: str = "d", extra_iso: str |
             p.unlink()
     (d / "boot.log").write_text(f"# boot {time.strftime('%F %T')}\n" +
                                 " ".join(_qemu_cmdline(meta, boot, extra_iso)) + "\n")
-    # -daemonize detaches; route stderr to a file so we can diagnose instant exits
+    # -daemonize detaches on POSIX; on Windows we detach the process instead
     errlog = open(d / "boot.err.log", "ab", buffering=0)
+    popen_kw = {}
+    if os.name == "nt":
+        popen_kw["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | \
+                                    getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     proc = subprocess.Popen(
         _qemu_cmdline(meta, boot, extra_iso),
         stdout=subprocess.DEVNULL, stderr=errlog,
-        start_new_session=True,
+        start_new_session=(os.name != "nt"), **popen_kw,
     )
     time.sleep(2.0)
     if proc.poll() is not None:
@@ -460,6 +465,40 @@ def vm_mount_iso(name: str, iso_path: str) -> dict:
     finally:
         qmp.close()
     return {"vm": name, "mounted": str(iso)}
+
+
+# QEMU sendkey names for the common keys an agent needs to drive an installer
+# (full set: `qemu-system-x86_64 -sendkey help` in a shell, or QEMU docs).
+SENDKEY_HELP = (
+    "Combo string with QEMU key names joined by '-': 'ret', 'spc', 'esc', 'tab', 'bksp', "
+    "'f1'..'f12', 'up'/'down'/'left'/'right', 'kp_enter', 'a'..'z', '0'..'9', "
+    "modifiers 'shift'/'ctrl'/'alt' (e.g. 'ctrl-alt-delete', 'shift-f8'). "
+    "One combo per call; call repeatedly with pauses to walk an installer."
+)
+
+
+def vm_sendkey(name: str, keys: str, hold_ms: int = 100) -> dict:
+    """Send a key combo to the VM's display via QMP human-monitor-command.
+
+    This is how the agent drives text-mode installers (press Enter, F8, F6 ...)
+    before the guest agent exists — the pre-agent phase of vm_boot that
+    WORKFLOW.md Phase 2 describes. Uses QEMU's 'sendkey' HMP command."""
+    if not vm_running(name):
+        raise VmError(f"VM '{name}' is not running")
+    combo = keys.strip().lower().replace(" ", "-")
+    if not combo or combo == "-":
+        raise VmError(f"empty key combo; {SENDKEY_HELP}")
+    for part in combo.split("-"):
+        if not part:
+            raise VmError(f"bad key combo '{keys}'; {SENDKEY_HELP}")
+    qmp = vm_qmp(name)
+    try:
+        qmp.hmp(f"sendkey {combo}")
+    finally:
+        qmp.close()
+    time.sleep(max(0.0, hold_ms / 1000.0))
+    return {"vm": name, "sent": combo,
+            "hint": "vm_screenshot to see the effect; one combo per call"}
 
 
 def vm_exec(name: str, path: str, args: list[str] | None = None, timeout: int = 120) -> dict:

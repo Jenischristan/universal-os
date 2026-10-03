@@ -1,6 +1,6 @@
 [project]
 name = "universal-os"
-version = "0.1.0"
+version = "0.2.0"
 description = "Tools, an MCP server, skills and a shared knowledge base that let an AI coding agent reverse engineer a Windows ISO in a sandbox VM and rebuild the OS ReactOS-style, component by component, until its apps run on the rebuild."
 readme = "README.md"
 license = "MIT"
@@ -21,3 +21,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["universal_os"]
+
+# Ship the agent-facing data with the wheel so `uv tool install` / `uvx` get the
+# knowledge base, phase prompts and skills — not just the Python package.
+[tool.hatch.build.targets.wheel.force-include]
+"knowledge" = "universal_os/_data/knowledge"
+"prompts" = "universal_os/_data/prompts"
+"skills" = "universal_os/_data/skills"
+"examples" = "universal_os/_data/examples"
+"RULES.md" = "universal_os/_data/RULES.md"
+"SKILL.md" = "universal_os/_data/SKILL.md"

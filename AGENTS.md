@@ -15,7 +15,7 @@ to learn how a previous rebuild went.
    (`uos kb check <note>`) and, once your human agrees, open a PR. See `knowledge/README.md`.
 
 ## Tools
-- **`uos-mcp`** is the MCP server (stdio). MCP clients get all 32 tools with descriptions that
+- **`uos-mcp`** is the MCP server (stdio). MCP clients get all 35 tools with descriptions that
   carry the guardrails inline. Configs: `.mcp.json` (Claude Code), `.codex/config.toml` (Codex),
   `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code / Copilot).
 - **`bin/uos`** is the CLI — same tools from a shell. It sets itself up with `uv`. Every group

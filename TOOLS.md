@@ -1,6 +1,6 @@
 # TOOLS.md — every tool, what it does, when to call it
 
-`uos-mcp` exposes 32 MCP tools over stdio; the `uos` CLI calls the same implementations.
+`uos-mcp` exposes 35 MCP tools over stdio; the `uos` CLI calls the same implementations.
 Arguments are JSON types in MCP (strings for enums like `boot`). All paths accept `~`.
 Errors are JSON `{"error": ...}` with actionable hints — read them, don't retry blind.
 
@@ -11,12 +11,14 @@ Errors are JSON `{"error": ...}` with actionable hints — read them, don't retr
 | `env_check` | — | qemu, qemu-img, git, cmake, ninja, mingw, KVM presence + install hint. **Call once per session, first.** |
 | `kb_search` | query, limit | field notes matching, best first. **Call before starting anything.** |
 | `kb_new` / `kb_check` / `kb_index` | see `--help` | create / lint / index field notes (`knowledge/README.md`) |
+| `kb_path` | — | which knowledge-base roots resolve (repo / packaged seed / UOS_HOME) — use when `kb_search` is empty and you need to know why |
 
 ## ISO & VM control
 
 | Tool | Args | Notes |
 |---|---|---|
 | `iso_inspect` | iso_path, max_entries | pure ISO9660/Joliet read, **no mounting**. Layout + markers. |
+| `iso_extract` | iso_path, member, dest, max_mb | pull ONE file out of the ISO (no mount, no boot) into the inspect dir. Keep extracted copies outside the repo. |
 | `fingerprint_windows` | iso_path | version/build guess + confidence + evidence. Decides the API strategy (NT 5.x vs 6.x). |
 | `vm_create` | name, iso_path, disk_gb, ram_mb, cpus, workspace, network, force | registers a VM + qcow2 disk. network=false unless the user said yes. |
 | `vm_boot` | name, wait_seconds, boot | headless start, boot="d" CD-first / "c" disk. TCG is slow — warn the user. |
@@ -26,6 +28,7 @@ Errors are JSON `{"error": ...}` with actionable hints — read them, don't retr
 | `vm_exec` | name, path, args, timeout | run a command in-guest via qemu-ga (install the agent first — error explains how). |
 | `vm_put_file` / `vm_get_file` | name, local/guest paths | copy files host↔guest via qemu-ga. |
 | `vm_mount_iso` | name, iso_path | swap the CD medium in a running VM (virtio-win ↔ reference ISO). |
+| `vm_sendkey` | name, keys, hold_ms | key combo to the display (`ret`, `f8`, `ctrl-alt-delete`…). Drives text-mode installers **before** the guest agent exists. Screenshot after each. |
 | `vm_shutdown` | name, force | ACPI powerdown → fallback quit → force kill. |
 | `vm_log` | name, tail | serial console tail + the exact qemu command line. |
 

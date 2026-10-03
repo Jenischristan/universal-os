@@ -24,18 +24,22 @@ agent starts from.
 ## Install
 
 Pick your agent. Each gets the same skills, the universal-os MCP server, and the `uos` CLI.
+Everything below installs straight from this repo — no PyPI release needed yet.
 
 | Agent | Install |
 |---|---|
-| **Claude Code** | `claude mcp add universal-os -- uv tool run universal-os-mcp` or clone and use `.mcp.json` |
-| **Codex / Cursor / VS Code** | Clone the repo and start the agent inside it; configs in `.codex/config.toml`, `.cursor/mcp.json`, `.vscode/mcp.json` |
-| **Skills only** (any agent) | `npx skills add <this-repo-url>` |
-| **Anything else** | `git clone <this-repo>` and start your agent inside it |
+| **Claude Code** | `claude mcp add universal-os -- uvx --from git+https://github.com/Jenischristan/universal-os uos-mcp` — or clone the repo and open it in Claude Code (`.mcp.json` works out of the box) |
+| **Codex / Cursor / VS Code** | Clone the repo and start the agent inside it; configs in `.codex/config.toml`, `.cursor/mcp.json`, `.vscode/mcp.json` are self-contained (they call `uvx --from git+... uos-mcp`) |
+| **Skills only** (any agent) | `npx skills add github.com/Jenischristan/universal-os` |
+| **Anything else** | `git clone https://github.com/Jenischristan/universal-os` and start your agent inside it |
 
 **The CLI, anywhere:**
 ```bash
-uv tool install <this-repo-url>        # or: pip install <this-repo-url>
+uv tool install git+https://github.com/Jenischristan/universal-os   # or: pip install git+https://github.com/Jenischristan/universal-os
 ```
+
+Both entry points (`uos`, `uos-mcp`) land on your PATH. There is no `universal-os-mcp`
+command — the MCP server executable is **`uos-mcp`** (`uos mcp` is the same thing).
 
 You need Python 3.10+, and QEMU for the VM parts (git, cmake, ninja and a MinGW toolchain when
 you reach the build phase):
@@ -84,7 +88,7 @@ code, no media links, honest status and verification.
 
 | Part | What it does |
 |---|---|
-| **MCP server** (`uos-mcp`) | 32 tools over stdio: ISO inspect/fingerprint, VM lifecycle (boot, screenshot, snapshot, exec, file transfer), PE analysis, API-surface dumps, syscall-trace plans, behavior diffs, component scaffolds, compat shims, reference-repo cloning, app-compat testing, knowledge base |
+| **MCP server** (`uos-mcp`) | 35 tools over stdio: ISO inspect/fingerprint, VM lifecycle (boot, screenshot, snapshot, exec, file transfer), PE analysis, API-surface dumps, syscall-trace plans, behavior diffs, component scaffolds, compat shims, reference-repo cloning, app-compat testing, knowledge base |
 | **`uos` CLI** | The same tools from a shell — for agents without MCP and for humans |
 | **skills/build-any-os** | The whole loop, hard rules, and playbooks per phase (fingerprint, boot, survey, route, spec, build, verify, publish) |
 | **knowledge/** | Field notes from previous rebuilds + a generated INDEX |

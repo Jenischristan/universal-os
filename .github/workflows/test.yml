@@ -33,6 +33,22 @@ jobs:
             assert any(m.get('id')==2 and len(m['result']['tools'])>=30 for m in msgs), 'tools/list failed'; print('MCP OK')"
       - name: Knowledge base lint
         run: python -m universal_os.cli kb index
+      - name: Wheel packaging — knowledge/, prompts/, skills/ must ship
+        run: |
+          pip wheel . --no-deps -w dist -q
+          python - << 'PY'
+          import zipfile, glob, sys
+          whl = glob.glob("dist/*.whl")
+          assert whl, "no wheel built"
+          names = zipfile.ZipFile(whl[0]).namelist()
+          required = ["universal_os/_data/knowledge/INDEX.md",
+                      "universal_os/_data/prompts/00-start-here.md",
+                      "universal_os/_data/skills/build-any-os/SKILL.md"]
+          missing = [r for r in required if r not in names]
+          if missing:
+              sys.exit(f"wheel is missing packaged data: {missing}")
+          print(f"wheel OK ({len(names)} files, _data present)")
+          PY
       - name: Guardrails self-check — repo must be free of red-flag artifacts
         run: |
           python - << 'PY'

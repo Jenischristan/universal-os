@@ -2,8 +2,8 @@
   "mcpServers": {
     "universal-os": {
       "type": "stdio",
-      "command": "uos-mcp",
-      "args": [],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/Jenischristan/universal-os", "uos-mcp"],
       "env": { "UOS_HOME": "${UOS_HOME:-~/.universal-os}" }
     }
   }

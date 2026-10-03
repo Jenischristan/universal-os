@@ -143,14 +143,16 @@ def vm_restore(name: str, tag: str) -> str:
 
 @mcp.tool()
 def vm_exec(name: str, path: str, args: str = "", timeout: int = 120) -> str:
-    """Run a command inside the guest via the QEMU guest agent (qemu-ga must be installed).
+    r"""Run a command inside the guest via the QEMU guest agent (qemu-ga must be installed).
 
-    args: single string, split on whitespace respecting \\ quoting. Windows guests: use
-    'cmd.exe' with args like '/c dir C:\\'. If the agent is missing the error explains
-    how to install it (virtio-win ISO for Windows guests)."""
+    args: single string, split on whitespace, quotes respected, backslashes kept
+    as-is (Windows guest paths like 'C:\uos-tests\app.exe' survive). Windows guests:
+    use 'cmd.exe' with args like '/c dir C:\'. If the agent is missing the error
+    explains how to install it (virtio-win ISO for Windows guests)."""
     try:
-        import shlex
-        argv = shlex.split(args, posix=True) if args else []
+        from .util import split_guest_args
+        # Windows-cmd semantics: backslashes stay literal, quotes group
+        argv = split_guest_args(args) if args else []
         return _ok(qemu.vm_exec(name, path, argv, timeout))
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
@@ -181,6 +183,20 @@ def vm_mount_iso(name: str, iso_path: str) -> str:
     guest agent, then swap back to the reference ISO)."""
     try:
         return _ok(qemu.vm_mount_iso(name, iso_path))
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def vm_sendkey(name: str, keys: str, hold_ms: int = 100) -> str:
+    """Send a key combo to the VM display: 'ret', 'esc', 'f8', 'ctrl-alt-delete',
+    'shift-f10', 'spc', 'tab', 'up'/'down'/'left'/'right', single letters/digits.
+
+    This drives text-mode installers BEFORE the guest agent exists (the part
+    vm_exec cannot reach). One combo per call; screenshot after each to see the
+    installer's reaction."""
+    try:
+        return _ok(qemu.vm_sendkey(name, keys, hold_ms))
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 
@@ -229,6 +245,20 @@ def analyze_pe(path: str) -> str:
     Reports interface facts only — no disassembly, nothing shippable from the binary."""
     try:
         return _ok(retools.analyze_pe(path))
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def iso_extract(iso_path: str, member: str, dest: str, max_mb: int = 64) -> str:
+    """Extract ONE file from an install ISO to the host inspect dir — no mounting
+    (pure ISO9660/Joliet read), e.g. member='/I386/NTOSKRNL.EX_' dest='~/inspect/xp/'.
+
+    Inspection only: keep extracted copies OUTSIDE the rebuilt-OS repo and keep
+    only interface facts (RULES.md). Pair with analyze_pe / dump_api_surface."""
+    try:
+        return _ok(retools.iso_extract(iso_path, member, dest,
+                                       max_bytes=max_mb * 1024 * 1024))
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 
@@ -367,10 +397,10 @@ def test_app_in_vm(vm: str, app_path: str = "", args: str = "", workspace: str =
     tests/results/ and tests/RESULTS.md in the workspace. Use reference apps the
     user owns (RULES.md)."""
     try:
-        import shlex
-        argv = shlex.split(args, posix=True) if args else []
-        inst = shlex.split(install_cmd, posix=True) if install_cmd else None
-        run = shlex.split(run_cmd, posix=True) if run_cmd else None
+        from .util import split_guest_args
+        argv = split_guest_args(args) if args else []
+        inst = split_guest_args(install_cmd) if install_cmd else None
+        run = split_guest_args(run_cmd) if run_cmd else None
         return _ok(testtools.test_app_in_vm(
             vm, app_path or None, argv, workspace or None, inst, run, timeout,
             label or None))
@@ -404,9 +434,21 @@ def regression_log(workspace: str, status: str, note: str) -> str:
 @mcp.tool()
 def kb_search(query: str, limit: int = 10) -> str:
     """Search field notes from previous rebuild attempts (routes, gotchas, versions).
-    Search BEFORE starting — prior art saves the whole session."""
+    Search BEFORE starting — prior art saves the whole session. Covers the repo
+    knowledge base, the wheel's seed notes, and $UOS_HOME/knowledge."""
     try:
         return _ok({"hits": kb.search(query, limit=limit)})
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def kb_path() -> str:
+    """Report which knowledge-base roots resolve and where new notes go
+    (repo checkout / packaged seed / UOS_HOME). Use when kb_search comes back
+    empty and you need to know why."""
+    try:
+        return _ok(kb.kb_path())
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 

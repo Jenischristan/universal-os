@@ -10,10 +10,10 @@ You are the rebuilder. The user names an ISO and a compatibility goal ("run note
 is the ReactOS/Wine method — clean-room reimplementation from behavioral specs — with the loop,
 tools and guardrails of this repo doing the driving.
 
-- Guardrails: `RULES.md` (read it before the first tool call; the short form is below).
-- Phase playbooks: `references/` — one per phase of the loop.
-- Worked example: `examples/first-rebuild/EXAMPLE.md`.
-- Everything other agents wrote down: the knowledge base (`knowledge/`, `uos kb search`).
+- Guardrails: `RULES.md` at the repo root (read it before the first tool call; the short form is below).
+- Phase playbooks: `references/` (this folder) — one per phase of the loop.
+- Worked example: `../../examples/first-rebuild/EXAMPLE.md`.
+- Everything other agents wrote down: the knowledge base (`knowledge/`, `uos kb search`, `uos kb path`).
 
 ## What "the rebuild" is
 
@@ -33,7 +33,9 @@ surfaces, behavioral specs in `spec/`, app-compat results in `tests/`, and refer
 | What Windows is inside this ISO, without booting it | `fingerprint_windows`, `iso_inspect` |
 | A sandbox lab: create, boot, screenshot, snapshot, restore | `vm_create` → `vm_boot` → `vm_screenshot` → `vm_snapshot`/`vm_restore` |
 | Drive the guest (needs qemu-ga installed in it) | `vm_exec`, `vm_put_file`, `vm_get_file`, `vm_mount_iso` |
+| Drive the installer BEFORE the guest agent exists | `vm_sendkey` (+ `vm_screenshot` after each) |
 | One binary's interface facts (headers, imports, exports, versions) | `analyze_pe` |
+| Pull one file out of the ISO without booting or mounting | `iso_extract` |
 | A whole directory of reference DLLs → the target contract | `dump_api_surface` |
 | How to capture syscalls in-guest (ETW/WPR, KDNET) | `trace_syscalls` |
 | Reference vs rebuild: who exports what, coverage % | `behavior_diff` |
@@ -41,7 +43,7 @@ surfaces, behavioral specs in `spec/`, app-compat results in `tests/`, and refer
 | Prior art: ReactOS, Wine, QEMU, virtio-win | `clone_reference_repo` |
 | How to build what the host allows | `build_plan` |
 | Does the app actually run on the rebuild? | `test_app_in_vm` → `compat_report` → `regression_log` |
-| What previous agents learned | `kb_search`, `kb_new`, `kb_check`, `kb_index` |
+| What previous agents learned | `kb_search`, `kb_new`, `kb_check`, `kb_index`, `kb_path` |
 
 ## The loop
 
@@ -61,11 +63,13 @@ surfaces, behavioral specs in `spec/`, app-compat results in `tests/`, and refer
 - `fingerprint_windows <iso>`: version, build, layout (I386/ vs SOURCES/WIM), confidence.
   The version decides the API-surface strategy — NT 5.x (XP/2003) and NT 6.x (Vista+) differ
   enormously. `iso_inspect` for the file layout when the fingerprint is ambiguous.
-- Read the matching phase playbook in `references/` before the first VM boot.
+- Read the matching phase playbook in `references/` (this folder) before the first VM boot.
 
 ### 2. Lab (the safety net)
 - `vm_create` with the reference ISO: network **off**, disk sized to the OS (XP: 8-10 GB is
   plenty; Win10: 40+ GB), then `vm_boot` and `vm_screenshot` in a loop to walk the installer.
+  Text-mode setup screens that need a keypress: `vm_sendkey` (`ret`, `f8`, `spc`, ...) —
+  screenshot after each combo to see the installer react.
 - Under TCG (no `/dev/kvm`) a full Windows install takes 30-90+ minutes — say so up front,
   snapshot at milestones (`vm_snapshot` right after a clean install: `clean-install`), and
   prefer restoring snapshots to reinstalling.
@@ -73,9 +77,12 @@ surfaces, behavioral specs in `spec/`, app-compat results in `tests/`, and refer
   snapshots between risky steps. `vm_shutdown` cleanly; force only when wedged.
 
 ### 3. Survey (read the real thing, don't guess)
-- In the reference VM: install the QEMU guest agent (swap in the virtio-win ISO with
-  `vm_mount_iso`, or fetch the MSI inside the guest with `vm_exec`), then `vm_exec` works and
-  `vm_get_file` can pull artifacts out.
+- In the reference VM: install the QEMU guest agent, then `vm_exec` works and `vm_get_file`
+  can pull artifacts out. The default route needs **no networking**: swap in a virtio-win ISO
+  with `vm_mount_iso`, install qemu-ga from it (screenshots + `vm_sendkey` through the
+  installer, or its silent MSI switch once it is running), then swap the reference ISO back.
+  Only fetch the MSI from the network inside the guest if the user has explicitly approved VM
+  networking for this VM (RULES.md §6).
 - `dump_api_surface` the reference system DLLs (extract copies **outside** the repo, e.g.
   `~/inspect/<os>/`; only the generated surface JSON/MD enters `api/`). The surface is the
   rebuild's target contract: module → exports → imports → versions.
