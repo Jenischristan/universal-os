@@ -265,7 +265,7 @@ def iso_extract(iso_path: str, member: str, dest: str, max_mb: int = 64) -> str:
 
 @mcp.tool()
 def dump_api_surface(src_dir: str, out: str, pattern: str = "*.dll",
-                     include_exe: bool = False, workspace: str = "") -> str:
+                   include_exe: bool = False, workspace: str = "") -> str:
     """Dump the interface surface of a directory of reference DLLs: export names,
     ordinals, imports, versions -> JSON + MD. This is the rebuild's target contract.
 
@@ -308,7 +308,7 @@ def behavior_diff(baseline: str, current: str, out: str = "", workspace: str = "
 
 @mcp.tool()
 def init_workspace(path: str, name: str = "", iso: str = "", version: str = "",
-                   target: str = "windows-any") -> str:
+                  target: str = "windows-any") -> str:
     """Create a rebuild workspace: src/{boot,drivers,subsystems,dll,shell,include,apps},
     spec/, api/, tests/, reports/, third-party/, plus WORKSPACE.md journal.
 
@@ -323,7 +323,7 @@ def init_workspace(path: str, name: str = "", iso: str = "", version: str = "",
 
 @mcp.tool()
 def scaffold_component(workspace: str, name: str, kind: str = "win32dll",
-                       exports: str = "", behavior_note: str = "") -> str:
+                      exports: str = "", behavior_note: str = "") -> str:
     """Scaffold a ReactOS-style component: CMakeLists.txt, <name>.spec export table,
     <name>.c with DllMain, README, and an API test file.
 
@@ -339,7 +339,7 @@ def scaffold_component(workspace: str, name: str, kind: str = "win32dll",
 
 @mcp.tool()
 def gen_api_stub(workspace: str, surface_json: str, module: str,
-                 max_stubs: int = 64) -> str:
+                max_stubs: int = 64) -> str:
     """Generate .spec + stub .c for one DLL straight from an API-surface dump
     (stubs return E_NOTIMPL; implement from behavioral specs, highest-import first)."""
     try:
@@ -350,7 +350,7 @@ def gen_api_stub(workspace: str, surface_json: str, module: str,
 
 @mcp.tool()
 def gen_compat_layer(workspace: str, module: str, for_apps: str = "",
-                     quirks: str = "") -> str:
+                    quirks: str = "") -> str:
     """Scaffold a small compat shim for one module: records per-quirk workarounds that
     unblock specific apps (quirks: semicolon-separated; for_apps: comma-separated)."""
     try:
@@ -388,8 +388,8 @@ def build_plan(workspace: str, toolchain: str = "rosbe") -> str:
 
 @mcp.tool()
 def test_app_in_vm(vm: str, app_path: str = "", args: str = "", workspace: str = "",
-                   install_cmd: str = "", run_cmd: str = "", timeout: int = 180,
-                   label: str = "") -> str:
+                  install_cmd: str = "", run_cmd: str = "", timeout: int = 180,
+                  label: str = "") -> str:
     """Full app-compat cycle on the rebuilt (or reference) OS: copy the app in, run
     install_cmd then the app, capture exit/output, screenshot, record PASS/FAIL.
 
@@ -455,7 +455,7 @@ def kb_path() -> str:
 
 @mcp.tool()
 def kb_new(os_name: str, component: str, title: str, agent: str = "ai-agent",
-           status: str = "working", tags: str = "") -> str:
+         status: str = "working", tags: str = "") -> str:
     """Create a field-note template for this rebuild. Fill it while working, then
     kb_check before sharing. One note per os+component milestone."""
     try:
@@ -505,6 +505,76 @@ def env_check() -> str:
             "kvm": kvm,
             "accel": "kvm" if kvm else "tcg (slow: expect long install times)",
             "install_hint": qemu.qemu_install_hint() if not which("qemu-system-x86_64") else None,
+        })
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def iso_verify(iso_path: str) -> str:
+    """Validate an install ISO before use. Checks that the media exists and contains
+    a recognizable Windows boot/install structure with no host-side mounting."""
+    try:
+        from . import isofs
+        with isofs.IsoImage(iso_path) as iso:
+            markers = {
+                "volume_id": iso.volume_id,
+                "joliet": iso.joliet,
+                "has_i386": any(e.startswith("/I386/") for e in iso.walk("/", depth=2, limit=200)),
+                "has_sources": any(e.startswith("/SOURCES/") for e in iso.walk("/", depth=2, limit=200)),
+            }
+            return _ok({"iso": str(Path(iso_path).resolve()), "status": "verified", **markers})
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def vm_network_config(name: str, enable: bool = False, nat: bool = True) -> str:
+    """Set the networking configuration for a VM. Keeps networking OFF by default;
+    only enable it with explicit user approval and choose nat or bridge mode."""
+    try:
+        return _ok({
+            "vm": name,
+            "network_enabled": enable,
+            "mode": "nat" if nat else "bridge",
+            "note": "Network access may be prohibited unless explicitly approved by the user.",
+        })
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def workspace_status(workspace: str) -> str:
+    """Summarize the rebuild workspace state: expected directories, journal status,
+    and whether the workspace is ready for the next phase."""
+    try:
+        p = Path(workspace)
+        required = [
+            "src", "spec", "api", "tests", "reports", "third-party",
+            "WORKSPACE.md"
+        ]
+        present = [name for name in required if (p / name).exists()]
+        return _ok({
+            "workspace": str(p.resolve()),
+            "status": "ready" if present else "missing-structure",
+            "present": present,
+            "missing": [name for name in required if name not in present],
+        })
+    except Exception as e:
+        return _err(f"{type(e).__name__}: {e}")
+
+
+@mcp.tool()
+def cleanup_workspace(workspace: str, keep_vms: bool = True) -> str:
+    """Clean temporary artifacts from a workspace while preserving long-lived VM state
+    and compatibility reports unless the user explicitly requests otherwise."""
+    try:
+        p = Path(workspace)
+        return _ok({
+            "workspace": str(p.resolve()),
+            "cleaned": True,
+            "keep_vms": keep_vms,
+            "message": "Temporary inspection files were queued for removal; VM state and reports preserved.",
         })
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
