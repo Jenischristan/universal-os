@@ -23,14 +23,12 @@ jobs:
           done
           python -m universal_os.cli --version
       - name: MCP stdio handshake
-        run: |
-          printf '%s\n' \
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
-            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-            | timeout 15 python -m universal_os.mcp_server \
-            | python -c "import sys,json; msgs=[json.loads(l) for l in sys.stdin if l.strip()]; \
-            assert any(m.get('id')==2 and len(m['result']['tools'])>=30 for m in msgs), 'tools/list failed'; print('MCP OK')"
+        # Lockstep client (request -> wait for matching response -> next).
+        # The previous fire-and-close pipe lost the tools/list response to a
+        # teardown race in the mcp 2.x SDK (stdin closed microseconds after the
+        # request cancels the in-flight handler; the response is silently
+        # dropped) and failed intermittently in CI. See tests/mcp_handshake.py.
+        run: python tests/mcp_handshake.py 60
       - name: Knowledge base lint
         run: python -m universal_os.cli kb index
       - name: Wheel packaging — knowledge/, prompts/, skills/ must ship

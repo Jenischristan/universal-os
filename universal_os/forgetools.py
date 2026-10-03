@@ -6,6 +6,8 @@ from *behavioral specs and interface facts* — never from decompiled bodies (RU
 """
 from __future__ import annotations
 
+import os
+import shutil
 import time
 from pathlib import Path
 
@@ -416,3 +418,97 @@ def build_plan(workspace: str, toolchain: str = "rosbe") -> dict:
             "build inside the workspace; never commit build outputs",
         ],
     }
+
+
+# --------------------------------------------------------------------------
+# Workspace status & cleanup
+# --------------------------------------------------------------------------
+
+REQUIRED_DIRS = ("src", "spec", "api", "tests", "reports", "third-party")
+JOURNAL = "WORKSPACE.md"
+# Only ever touched by cleanup_workspace: regenerable build/test junk.
+JUNK_DIR_NAMES = {"__pycache__", ".pytest_cache", "build", "dist"}
+JUNK_SUFFIXES = {".pyc", ".pyo", ".tmp"}
+
+
+def workspace_status(workspace: str) -> dict:
+    """Report the rebuild workspace state: required dirs, journal, api/ and src/."""
+    p = Path(workspace).expanduser().resolve()
+    if not p.exists():
+        return {"workspace": str(p), "status": "missing",
+                "hint": "create it with init_workspace first"}
+    present = [d for d in REQUIRED_DIRS if (p / d).is_dir()]
+    missing = [d for d in REQUIRED_DIRS if d not in present]
+    journal = p / JOURNAL
+    journal_present = journal.is_file()
+    last_line = None
+    if journal_present:
+        lines = [ln.strip() for ln in
+                 journal.read_text(encoding="utf-8", errors="replace").splitlines()
+                 if ln.strip()]
+        last_line = lines[-1][:160] if lines else None
+    api_files = sum(1 for f in (p / "api").iterdir() if f.is_file()) \
+        if (p / "api").is_dir() else 0
+    src_components = sum(1 for d in (p / "src").iterdir() if d.is_dir()) \
+        if (p / "src").is_dir() else 0
+    ready = not missing and journal_present
+    return {
+        "workspace": str(p),
+        "status": "ready" if ready else "incomplete",
+        "dirs_present": present,
+        "dirs_missing": missing,
+        "journal": {"present": journal_present, "last_line": last_line},
+        "api_surface_files": api_files,
+        "src_components": src_components,
+        "next_hint": None if ready else
+            ("create the missing structure with init_workspace"
+             if missing or not journal_present else None),
+    }
+
+
+def _scan_junk(root: Path) -> list[Path]:
+    """Collect regenerable junk under root. Never descends into a junk dir;
+    skips third-party/ and .git entirely (reference clones stay untouched)."""
+    hits: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        for d in list(dirnames):
+            if d in ("third-party", ".git"):
+                dirnames.remove(d)  # never scanned, never touched
+            elif d in JUNK_DIR_NAMES:
+                hits.append(Path(dirpath) / d)
+                dirnames.remove(d)  # the whole dir is junk; do not descend
+        for f in filenames:
+            if Path(f).suffix in JUNK_SUFFIXES:
+                hits.append(Path(dirpath) / f)
+    return hits
+
+
+def cleanup_workspace(workspace: str, confirm: bool = False) -> dict:
+    """Find (and with confirm=True delete) regenerable junk in the workspace:
+    __pycache__, .pytest_cache, build/, dist/, *.pyc/*.pyo/*.tmp.
+
+    Dry run by default and the response says so explicitly. Sources, WORKSPACE.md,
+    reports/, tests results and third-party/ are never touched. VMs live under
+    UOS_HOME and are never affected by workspace cleanup."""
+    p = Path(workspace).expanduser().resolve()
+    if not p.exists():
+        raise FileNotFoundError(f"workspace not found: {p}")
+    hits = _scan_junk(p)
+    rel = sorted(str(h.relative_to(p)) for h in hits)
+    if not confirm:
+        return {"workspace": str(p), "deleted": False,
+                "would_remove": rel, "count": len(rel),
+                "note": "dry run only — pass confirm=true to delete; "
+                        "sources, journal, reports and third-party/ are never touched; "
+                        "VMs live under UOS_HOME and are unaffected"}
+    removed: list[str] = []
+    for h in hits:
+        if h.is_dir():
+            shutil.rmtree(h, ignore_errors=True)
+        else:
+            h.unlink(missing_ok=True)
+        removed.append(str(h.relative_to(p)))
+    return {"workspace": str(p), "deleted": True, "removed": removed,
+            "count": len(removed),
+            "note": "deleted regenerable junk only; VMs live under UOS_HOME "
+                    "and are unaffected"}

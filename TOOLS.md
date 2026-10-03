@@ -1,6 +1,6 @@
 # TOOLS.md — every tool, what it does, when to call it
 
-`uos-mcp` exposes 35 MCP tools over stdio; the `uos` CLI calls the same implementations.
+`uos-mcp` exposes 39 MCP tools over stdio; the `uos` CLI calls the same implementations.
 Arguments are JSON types in MCP (strings for enums like `boot`). All paths accept `~`.
 Errors are JSON `{"error": ...}` with actionable hints — read them, don't retry blind.
 
@@ -18,6 +18,7 @@ Errors are JSON `{"error": ...}` with actionable hints — read them, don't retr
 | Tool | Args | Notes |
 |---|---|---|
 | `iso_inspect` | iso_path, max_entries | pure ISO9660/Joliet read, **no mounting**. Layout + markers. |
+| `iso_verify` | iso_path | pre-flight check: media readable, boot/install structure present (`/I386/` or `/SOURCES/`). Run after download, before `vm_create`. |
 | `iso_extract` | iso_path, member, dest, max_mb | pull ONE file out of the ISO (no mount, no boot) into the inspect dir. Keep extracted copies outside the repo. |
 | `fingerprint_windows` | iso_path | version/build guess + confidence + evidence. Decides the API strategy (NT 5.x vs 6.x). |
 | `vm_create` | name, iso_path, disk_gb, ram_mb, cpus, workspace, network, force | registers a VM + qcow2 disk. network=false unless the user said yes. |
@@ -29,6 +30,7 @@ Errors are JSON `{"error": ...}` with actionable hints — read them, don't retr
 | `vm_put_file` / `vm_get_file` | name, local/guest paths | copy files host↔guest via qemu-ga. |
 | `vm_mount_iso` | name, iso_path | swap the CD medium in a running VM (virtio-win ↔ reference ISO). |
 | `vm_sendkey` | name, keys, hold_ms | key combo to the display (`ret`, `f8`, `ctrl-alt-delete`…). Drives text-mode installers **before** the guest agent exists. Screenshot after each. |
+| `vm_network_config` | name, enable, nat | set the network flag (off by default; enabling needs the user's OK — RULES.md). NAT only; bridge raises. Applies at the next `vm_boot`. CLI: `uos vm network`. |
 | `vm_shutdown` | name, force | ACPI powerdown → fallback quit → force kill. |
 | `vm_log` | name, tail | serial console tail + the exact qemu command line. |
 
@@ -51,6 +53,8 @@ Errors are JSON `{"error": ...}` with actionable hints — read them, don't retr
 | `gen_compat_layer` | workspace, module, for_apps, quirks | small per-quirk shim; one quirk per app, never subsystem-wide. |
 | `clone_reference_repo` | workspace, repo, dest | reactos / wine / qemu / virtio-win / any git URL → `third-party/` (reference only). |
 | `build_plan` | workspace, toolchain | host toolchain check + exact build steps. |
+| `workspace_status` | workspace | readiness report: required dirs, WORKSPACE.md journal + last line, api/ files, src/ components. CLI: `uos forge status`. |
+| `cleanup_workspace` | workspace, confirm | find (and with `confirm=true` delete) regenerable junk: `__pycache__`, `.pytest_cache`, `build/`, `dist/`, `*.pyc`. Dry run by default; sources, journal, reports, third-party/ and VMs are never touched. CLI: `uos forge cleanup`. |
 
 ## Test harness
 

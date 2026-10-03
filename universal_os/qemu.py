@@ -501,6 +501,35 @@ def vm_sendkey(name: str, keys: str, hold_ms: int = 100) -> dict:
             "hint": "vm_screenshot to see the effect; one combo per call"}
 
 
+def vm_network_config(name: str, enable: bool, nat: bool = True) -> dict:
+    """Set the VM's network flag in the registry (takes effect at the next boot).
+
+    Networking stays OFF by default and enabling it requires the user's
+    explicit OK (RULES.md). Only user-mode NAT (-netdev user) is implemented:
+    requesting bridge mode raises instead of pretending to succeed. A running
+    VM keeps its current network until it is shut down and booted again."""
+    meta = config.vm_get(name)
+    if not meta:
+        raise VmError(f"unknown VM '{name}'; create it first with vm_create")
+    if enable and not nat:
+        raise VmError("bridge mode is not implemented; the launcher supports "
+                      "user-mode NAT only (QEMU -netdev user)")
+    running = vm_running(name)
+    meta["network"] = bool(enable)
+    config.vm_set(name, meta)
+    return {
+        "vm": name,
+        "network_enabled": bool(enable),
+        "mode": "nat" if enable else "none",
+        "vm_running": running,
+        "effective": "after shutdown + vm_boot (still running with old setting)"
+                     if running else "next vm_boot",
+        "note": ("networking is OFF by default; enabling it needs the user's "
+                 "explicit OK (RULES.md)") if enable else
+                ("network stays off (default, RULES.md)"),
+    }
+
+
 def vm_exec(name: str, path: str, args: list[str] | None = None, timeout: int = 120) -> dict:
     """Run a command inside the guest. Requires qemu-ga installed in the guest."""
     meta = config.vm_get(name)

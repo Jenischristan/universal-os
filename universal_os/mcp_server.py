@@ -517,65 +517,52 @@ def iso_verify(iso_path: str) -> str:
     try:
         from . import isofs
         with isofs.IsoImage(iso_path) as iso:
+            entries = iso.walk("/", depth=2, limit=200)
+            paths = [e["path"] for e in entries]
             markers = {
                 "volume_id": iso.volume_id,
                 "joliet": iso.joliet,
-                "has_i386": any(e.startswith("/I386/") for e in iso.walk("/", depth=2, limit=200)),
-                "has_sources": any(e.startswith("/SOURCES/") for e in iso.walk("/", depth=2, limit=200)),
+                "has_i386": any(p.upper().startswith("/I386/") for p in paths),
+                "has_sources": any(p.upper().startswith("/SOURCES/") for p in paths),
             }
-            return _ok({"iso": str(Path(iso_path).resolve()), "status": "verified", **markers})
+            return _ok({"iso": str(Path(iso_path).resolve()), "status": "verified",
+                        **markers})
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 
 
 @mcp.tool()
 def vm_network_config(name: str, enable: bool = False, nat: bool = True) -> str:
-    """Set the networking configuration for a VM. Keeps networking OFF by default;
-    only enable it with explicit user approval and choose nat or bridge mode."""
+    """Set the VM's network flag: OFF by default; enabling needs the user's OK
+    (RULES.md). Only user-mode NAT is implemented (bridge raises honestly).
+    Applies at the next vm_boot - a running VM keeps its old network until
+    shutdown + boot. Check with vm_status."""
     try:
-        return _ok({
-            "vm": name,
-            "network_enabled": enable,
-            "mode": "nat" if nat else "bridge",
-            "note": "Network access may be prohibited unless explicitly approved by the user.",
-        })
+        return _ok(qemu.vm_network_config(name, enable, nat))
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 
 
 @mcp.tool()
 def workspace_status(workspace: str) -> str:
-    """Summarize the rebuild workspace state: expected directories, journal status,
-    and whether the workspace is ready for the next phase."""
+    """Summarize the rebuild workspace: required dirs (src/spec/api/tests/reports/
+    third-party), the WORKSPACE.md journal state and its last line, api/ surface
+    count and src/ components. Use to decide the next phase of the loop."""
     try:
-        p = Path(workspace)
-        required = [
-            "src", "spec", "api", "tests", "reports", "third-party",
-            "WORKSPACE.md"
-        ]
-        present = [name for name in required if (p / name).exists()]
-        return _ok({
-            "workspace": str(p.resolve()),
-            "status": "ready" if present else "missing-structure",
-            "present": present,
-            "missing": [name for name in required if name not in present],
-        })
+        return _ok(forgetools.workspace_status(workspace))
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 
 
 @mcp.tool()
-def cleanup_workspace(workspace: str, keep_vms: bool = True) -> str:
-    """Clean temporary artifacts from a workspace while preserving long-lived VM state
-    and compatibility reports unless the user explicitly requests otherwise."""
+def cleanup_workspace(workspace: str, confirm: bool = False) -> str:
+    """Find (and with confirm=true delete) regenerable junk in the workspace:
+    __pycache__, .pytest_cache, build/, dist/, *.pyc/*.pyo/*.tmp. Dry run by
+    default - the response lists what would go. Sources, WORKSPACE.md, reports/
+    and third-party/ are never touched; VMs live under UOS_HOME and are
+    unaffected. Use before archiving or sharing the workspace."""
     try:
-        p = Path(workspace)
-        return _ok({
-            "workspace": str(p.resolve()),
-            "cleaned": True,
-            "keep_vms": keep_vms,
-            "message": "Temporary inspection files were queued for removal; VM state and reports preserved.",
-        })
+        return _ok(forgetools.cleanup_workspace(workspace, confirm))
     except Exception as e:
         return _err(f"{type(e).__name__}: {e}")
 

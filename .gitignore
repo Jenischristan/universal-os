@@ -10,3 +10,4 @@ __pycache__/
 *.qcow2
 *.ppm
 UOS_HOME/
+dist/

@@ -88,7 +88,7 @@ code, no media links, honest status and verification.
 
 | Part | What it does |
 |---|---|
-| **MCP server** (`uos-mcp`) | 35 tools over stdio: ISO inspect/fingerprint, VM lifecycle (boot, screenshot, snapshot, exec, file transfer), PE analysis, API-surface dumps, syscall-trace plans, behavior diffs, component scaffolds, compat shims, reference-repo cloning, app-compat testing, knowledge base |
+| **MCP server** (`uos-mcp`) | 39 tools over stdio: ISO inspect/fingerprint, VM lifecycle (boot, screenshot, snapshot, exec, file transfer), PE analysis, API-surface dumps, syscall-trace plans, behavior diffs, component scaffolds, compat shims, reference-repo cloning, app-compat testing, knowledge base |
 | **`uos` CLI** | The same tools from a shell — for agents without MCP and for humans |
 | **skills/build-any-os** | The whole loop, hard rules, and playbooks per phase (fingerprint, boot, survey, route, spec, build, verify, publish) |
 | **knowledge/** | Field notes from previous rebuilds + a generated INDEX |

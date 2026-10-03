@@ -79,6 +79,8 @@ def cmd_vm(args) -> int:
             _p(qemu.vm_mount_iso(args.name, args.iso))
         elif args.vm_cmd == "sendkey":
             _p(qemu.vm_sendkey(args.name, args.keys, args.hold_ms))
+        elif args.vm_cmd == "network":
+            _p(qemu.vm_network_config(args.name, args.enable))
         elif args.vm_cmd == "shutdown":
             _p(qemu.vm_shutdown(args.name, args.force))
         elif args.vm_cmd == "log":
@@ -135,8 +137,12 @@ def cmd_forge(args) -> int:
             _p(forgetools.clone_reference_repo(args.workspace, args.repo, args.dest))
         elif args.forge_cmd == "plan":
             _p(forgetools.build_plan(args.workspace, args.toolchain))
+        elif args.forge_cmd == "status":
+            _p(forgetools.workspace_status(args.workspace))
+        elif args.forge_cmd == "cleanup":
+            _p(forgetools.cleanup_workspace(args.workspace, args.confirm))
         else:
-            print("usage: uos forge init|scaffold|stub|shim|clone|plan ...")
+            print("usage: uos forge init|scaffold|stub|shim|clone|plan|status|cleanup ...")
     except Exception as e:
         return _die(str(e))
     return 0
@@ -260,6 +266,11 @@ def build_parser() -> argparse.ArgumentParser:
                           help="send a key combo to the display (drive installers pre-guest-agent)")
     p.add_argument("name"); p.add_argument("keys", help="e.g. ret, esc, f8, ctrl-alt-delete, shift-f10")
     p.add_argument("--hold-ms", type=int, default=100)
+    p = vm_sub.add_parser("network",
+                          help="show/set the VM's network flag (off by default; enabling needs the user's OK; NAT only)")
+    p.add_argument("name")
+    p.add_argument("--enable", action="store_true",
+                   help="enable user-mode NAT networking (RULES.md: ask the user first)")
     p = vm_sub.add_parser("shutdown"); p.add_argument("name"); p.add_argument("--force", action="store_true")
     p = vm_sub.add_parser("log"); p.add_argument("name"); p.add_argument("--tail", type=int, default=80)
     p = vm_sub.add_parser("destroy"); p.add_argument("name")
@@ -295,6 +306,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dest", default=None)
     p = fg_sub.add_parser("plan"); p.add_argument("workspace")
     p.add_argument("--toolchain", default="rosbe")
+    p = fg_sub.add_parser("status", help="workspace readiness: dirs, journal, api/ and src/ state")
+    p.add_argument("workspace")
+    p = fg_sub.add_parser("cleanup", help="find (and with --confirm delete) regenerable junk; dry run by default")
+    p.add_argument("workspace"); p.add_argument("--confirm", action="store_true")
     fg.set_defaults(func=cmd_forge)
 
     te = sub.add_parser("test", help="app-compat testing in the VM")

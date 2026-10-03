@@ -1,6 +1,6 @@
 [project]
 name = "universal-os"
-version = "0.2.0"
+version = "0.2.1"
 description = "Tools, an MCP server, skills and a shared knowledge base that let an AI coding agent reverse engineer a Windows ISO in a sandbox VM and rebuild the OS ReactOS-style, component by component, until its apps run on the rebuild."
 readme = "README.md"
 license = "MIT"
